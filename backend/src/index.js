@@ -5,6 +5,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import pool, { testConnection, initializeDatabase } from "./database/connection.js";
 import { validateUserRegistration, validateUserLogin, validatePaymentMethod, validateTransaction, validateUUID } from "./middleware/validation.js";
+import authRoutes from "./routes/auth.js";
 
 dotenv.config();
 const PORT = process.env.PORT || 3001;
@@ -25,6 +26,7 @@ const startServer = async () => {
       console.log(`📊 Health check: http://localhost:${PORT}/health`);
       console.log(`🔒 Security middleware enabled`);
       console.log(`✅ Input validation enabled`);
+      console.log(`🔐 Authentication enabled`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
@@ -49,6 +51,9 @@ app.use(limiter);
 
 app.use(express.json({ limit: '10mb' }));
 
+// Routes
+app.use('/api/auth', authRoutes);
+
 // Basic route
 app.get('/', (req, res) => {
     res.json({ 
@@ -56,7 +61,8 @@ app.get('/', (req, res) => {
       status: 'running',
       timestamp: new Date().toISOString(),
       security: 'enabled',
-      validation: 'enabled'
+      validation: 'enabled',
+      authentication: 'enabled'
     });
   });
   
