@@ -4,6 +4,7 @@ import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
 import pool, { testConnection, initializeDatabase } from "./database/connection.js";
+import { validateUserRegistration, validateUserLogin, validatePaymentMethod, validateTransaction, validateUUID } from "./middleware/validation.js";
 
 dotenv.config();
 const PORT = process.env.PORT || 3001;
@@ -23,18 +24,18 @@ const startServer = async () => {
       console.log(`🚀 PaySecure Gateway running on port ${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/health`);
       console.log(`🔒 Security middleware enabled`);
+      console.log(`✅ Input validation enabled`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
     process.exit(1);
   }
 };
-  
 
 // Security middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3001',
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
 }));
 
@@ -54,7 +55,8 @@ app.get('/', (req, res) => {
       message: 'PaySecure Gateway API', 
       status: 'running',
       timestamp: new Date().toISOString(),
-      security: 'enabled'
+      security: 'enabled',
+      validation: 'enabled'
     });
   });
   
@@ -76,6 +78,31 @@ app.get('/', (req, res) => {
       });
     }
   });
+
+// Test validation endpoints
+app.post('/test/validation/user', validateUserRegistration, (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'User validation passed',
+    data: req.body 
+  });
+});
+
+app.post('/test/validation/payment', validatePaymentMethod, (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Payment validation passed',
+    data: req.body 
+  });
+});
+
+app.post('/test/validation/transaction', validateTransaction, (req, res) => {
+  res.json({ 
+    success: true, 
+    message: 'Transaction validation passed',
+    data: req.body 
+  });
+});
   
 // Start the server
 startServer();
