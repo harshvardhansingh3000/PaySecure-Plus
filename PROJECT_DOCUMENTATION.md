@@ -41,6 +41,18 @@ Production-quality payment processing system with fraud detection capabilities.
 - **Files**: `backend/src/middleware/auth.js`, `backend/src/controllers/authController.js`, `backend/src/routes/auth.js`, `backend/src/index.js` (updated)
 - **Status**: COMPLETED
 
+### ✅ Step 7: Payment Processing
+- **Requirement**: Payment processing with authorize/capture/refund flow
+- **Implementation**: Complete payment gateway with mock acquirer integration
+- **Files**: `backend/src/services/mockAcquirer.js`, `backend/src/controllers/paymentController.js`, `backend/src/routes/payments.js`, `backend/src/index.js` (updated)
+- **Status**: COMPLETED
+
+### ✅ Step 8: Fraud Detection System
+- **Requirement**: Rule-based fraud detection with real-time scoring
+- **Implementation**: Comprehensive fraud analysis with velocity, amount, time, and geographic rules
+- **Files**: `backend/src/services/fraudDetection.js`, `backend/src/controllers/fraudController.js`, `backend/src/routes/fraud.js`, `backend/src/index.js` (updated)
+- **Status**: COMPLETED
+
 ## Database Schema Details
 
 ### Tables Created:
@@ -67,10 +79,10 @@ Production-quality payment processing system with fraud detection capabilities.
 - ✅ **Performance**: Strategic indexing for security queries
 
 ## Next Steps
-1. Implement payment processing (authorize/capture/refund) - IN PROGRESS
-2. Add fraud detection (rule-based scoring)
-3. Build admin dashboard (React + Tailwind)
-4. Add comprehensive testing (Jest + supertest)
+1. Build admin dashboard (React + Tailwind) - IN PROGRESS
+2. Add comprehensive testing (Jest + supertest)
+3. Create payment method management
+4. Add simulation engine for testing
 
 ## Security Practices Implemented
 - Environment variables for secrets
@@ -89,6 +101,10 @@ Production-quality payment processing system with fraud detection capabilities.
 - bcrypt password hashing (12 rounds)
 - Authentication middleware with token verification
 - Failed login attempt logging
+- Real-time fraud detection with rule-based scoring
+- Transaction velocity monitoring
+- Geographic and time-based fraud analysis
+- Risk level classification (low/medium/high/critical)
 
 ## PCI DSS Alignment (Educational/Demo)
 - ✅ **Data Protection**: Tokenization, no PAN storage
@@ -97,6 +113,7 @@ Production-quality payment processing system with fraud detection capabilities.
 - ✅ **Data Integrity**: Foreign keys, constraints
 - ✅ **Monitoring**: Comprehensive audit logs
 - ✅ **Authentication**: JWT tokens, bcrypt password hashing
+- ✅ **Fraud Detection**: Real-time risk scoring and monitoring
 - ⏳ **Encryption**: TLS/HTTPS (planned)
 - ⏳ **Key Management**: Secure key rotation (planned)
 - ⏳ **Penetration Testing**: Security testing (planned)
@@ -112,8 +129,31 @@ Frontend (React) → Backend (Express) → Database (PostgreSQL)
                 (JWT, bcrypt, RBAC)
                      ↓
                 Business Logic
-                (Payments, Fraud Detection)
+                (Payments, Fraud Detection, Mock Acquirer)
                      ↓
                 Data Layer
-                (Tokenization, Audit Logging)
+                (Tokenization, Audit Logging, Risk Scoring)
 ```
+
+## Fraud Detection System Details
+
+### Rule-Based Scoring Engine
+- **Velocity Rules**: Card and user transaction frequency monitoring
+- **Amount Rules**: High-value and unusual amount detection
+- **Time Rules**: Night and weekend transaction analysis
+- **Geographic Rules**: IP geolocation vs card BIN mismatch detection
+- **Card Rules**: New card and expiring card analysis
+
+### Risk Classification
+- **Low Risk**: 0-30 points
+- **Medium Risk**: 31-60 points
+- **High Risk**: 61-80 points
+- **Critical Risk**: 81-100 points
+
+### Fraud Detection Features
+- Real-time transaction analysis
+- Historical pattern recognition
+- Configurable rule weights and thresholds
+- ML-ready feature extraction
+- Comprehensive audit logging
+- Admin and user-specific reporting

@@ -309,6 +309,128 @@ All API responses follow this format:
 
 ---
 
+## 🛡️ Fraud Detection Endpoints
+
+### POST /api/fraud/analyze/:transactionId
+**Purpose**: Analyze a transaction for fraud risk
+**Authentication**: Required
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Fraud analysis completed",
+  "data": {
+    "transaction": {
+      "id": "transaction-uuid",
+      "amount": "100.00",
+      "currency": "USD",
+      "status": "authorized"
+    },
+    "fraudAnalysis": {
+      "riskScore": 45,
+      "riskLevel": "medium",
+      "triggeredRules": [
+        {
+          "rule": "NIGHT_TRANSACTION",
+          "weight": 5,
+          "value": 23
+        }
+      ],
+      "analysisTimestamp": "2024-01-15T10:30:00.000Z"
+    }
+  }
+}
+```
+**Benefits**:
+- Real-time fraud risk assessment
+- Rule-based scoring with detailed analysis
+- Stores fraud data for ML training
+- Logs analysis for audit compliance
+
+### GET /api/fraud/statistics
+**Purpose**: Get fraud detection statistics
+**Authentication**: Required
+**Query Parameters**:
+- `timeRange` (optional): 1h, 24h, 7d, 30d (default: 24h)
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "timeRange": "24h",
+    "statistics": {
+      "totalTransactions": 150,
+      "riskDistribution": {
+        "low": 120,
+        "medium": 25,
+        "high": 4,
+        "critical": 1
+      },
+      "averageRiskScore": 28.5,
+      "maxRiskScore": 95
+    }
+  }
+}
+```
+**Benefits**:
+- Comprehensive fraud statistics
+- Risk distribution analysis
+- Admin and user-specific views
+- Historical trend analysis
+
+### GET /api/fraud/flagged
+**Purpose**: Get flagged transactions by risk level
+**Authentication**: Required
+**Query Parameters**:
+- `riskLevel` (optional): low, medium, high, critical (default: high)
+- `limit` (optional): Number of results (default: 50)
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "riskLevel": "high",
+    "transactions": [
+      {
+        "fraudScoreId": "fraud-uuid",
+        "riskScore": 85,
+        "riskLevel": "high",
+        "triggeredRules": [
+          {
+            "rule": "VELOCITY_SAME_CARD",
+            "weight": 25,
+            "value": 8,
+            "threshold": 5
+          }
+        ],
+        "analysisTime": "2024-01-15T10:30:00.000Z",
+        "transaction": {
+          "id": "transaction-uuid",
+          "amount": "5000.00",
+          "currency": "USD",
+          "status": "authorized",
+          "createdAt": "2024-01-15T10:25:00.000Z",
+          "paymentMethod": {
+            "lastFour": "1234",
+            "brand": "visa"
+          }
+        },
+        "userEmail": "user@example.com"
+      }
+    ]
+  }
+}
+```
+**Benefits**:
+- Flagged transaction monitoring
+- Detailed fraud analysis results
+- Admin oversight capabilities
+- Risk-based transaction filtering
+
+---
+
 ## 📊 System Endpoints
 
 ### GET /
@@ -322,7 +444,8 @@ All API responses follow this format:
   "security": "enabled",
   "validation": "enabled",
   "authentication": "enabled",
-  "payments": "enabled"
+  "payments": "enabled",
+  "fraudDetection": "enabled"
 }
 ```
 

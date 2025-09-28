@@ -377,6 +377,147 @@ CREATE TABLE audit_logs (
 
 ---
 
+### `/backend/src/services/fraudDetection.js` - Fraud Detection Engine
+**Purpose**: Rule-based fraud detection and risk scoring
+**Key Responsibilities**:
+- Analyze transactions for fraud risk in real-time
+- Calculate risk scores based on multiple rule categories
+- Store fraud analysis results for ML training
+- Provide fraud statistics and reporting
+
+**Key Components**:
+```javascript
+// Fraud detection rules configuration
+const FRAUD_RULES = {
+  VELOCITY_SAME_CARD: { weight: 25, threshold: 5, timeWindow: 10 * 60 * 1000 },
+  VELOCITY_SAME_USER: { weight: 20, threshold: 10, timeWindow: 30 * 60 * 1000 },
+  HIGH_AMOUNT: { weight: 15, threshold: 5000 },
+  NIGHT_TRANSACTION: { weight: 5, startHour: 22, endHour: 6 },
+  GEO_MISMATCH: { weight: 20 }
+};
+
+// Main fraud analysis function
+export const analyzeTransaction = async (transactionData) => {
+  // 1. Velocity checks (card and user frequency)
+  const cardVelocity = await calculateCardVelocity(paymentMethodId, timeWindow);
+  const userVelocity = await calculateUserVelocity(userId, timeWindow);
+  
+  // 2. Amount analysis
+  if (amount >= HIGH_AMOUNT.threshold) riskScore += HIGH_AMOUNT.weight;
+  
+  // 3. Time-based analysis
+  if (isNightTransaction(timestamp)) riskScore += NIGHT_TRANSACTION.weight;
+  if (isWeekendTransaction(timestamp)) riskScore += WEEKEND_TRANSACTION.weight;
+  
+  // 4. Card analysis
+  if (await isNewCard(paymentMethodId)) riskScore += NEW_CARD.weight;
+  if (await isExpiringCard(paymentMethodId)) riskScore += EXPIRING_CARD.weight;
+  
+  // 5. Geographic analysis
+  if (hasGeoMismatch(ipAddress, cardBrand)) riskScore += GEO_MISMATCH.weight;
+  
+  // Determine risk level
+  const riskLevel = determineRiskLevel(riskScore);
+  
+  return {
+    riskScore: Math.min(riskScore, 100),
+    riskLevel,
+    triggeredRules,
+    features: { /* ML training data */ }
+  };
+};
+```
+
+**Benefits**:
+- Real-time fraud detection with configurable rules
+- Multiple risk factors for comprehensive analysis
+- ML-ready feature extraction for future model training
+- Historical pattern recognition and velocity monitoring
+- Geographic and time-based anomaly detection
+
+---
+
+### `/backend/src/controllers/fraudController.js` - Fraud Management Logic
+**Purpose**: Fraud analysis orchestration and reporting
+**Key Responsibilities**:
+- Coordinate fraud analysis for transactions
+- Provide fraud statistics and reporting
+- Manage flagged transaction queries
+- Handle admin vs user access controls
+
+**Key Components**:
+```javascript
+// Analyze transaction for fraud
+export const analyzeTransactionForFraud = async (req, res) => {
+  // Get transaction details
+  const transaction = await pool.query('SELECT * FROM transactions WHERE id = $1', [transactionId]);
+  
+  // Perform fraud analysis
+  const fraudAnalysis = await analyzeTransaction({
+    userId, paymentMethodId, amount, currency, ipAddress, userAgent, timestamp
+  });
+  
+  // Save fraud analysis to database
+  await pool.query(
+    'INSERT INTO fraud_scores (transaction_id, risk_score, risk_level, rules_triggered, features) VALUES (...)',
+    [transactionId, fraudAnalysis.riskScore, fraudAnalysis.riskLevel, ...]
+  );
+  
+  // Log fraud analysis for audit
+  await pool.query('INSERT INTO audit_logs (user_id, action, ...) VALUES (...)');
+  
+  return fraudAnalysis;
+};
+
+// Get fraud statistics with role-based access
+export const getFraudStatistics = async (req, res) => {
+  const isAdmin = req.user.role === 'admin';
+  
+  if (isAdmin) {
+    // Admin gets system-wide stats
+    stats = await getFraudStats(timeRange);
+  } else {
+    // Regular users get their own stats
+    stats = await getUserFraudStats(userId, timeRange);
+  }
+  
+  return { totalTransactions, riskDistribution, averageRiskScore };
+};
+```
+
+**Benefits**:
+- Centralized fraud analysis coordination
+- Role-based access control for fraud data
+- Comprehensive fraud reporting and statistics
+- Integration with audit logging system
+
+---
+
+### `/backend/src/routes/fraud.js` - Fraud Detection Routes
+**Purpose**: Fraud detection API endpoints
+**Key Responsibilities**:
+- Define fraud analysis endpoints
+- Apply authentication and validation middleware
+- Route fraud-related requests to controllers
+
+**Key Components**:
+```javascript
+// All fraud routes require authentication
+router.use(authenticateToken);
+
+// Fraud detection routes
+router.post('/analyze/:transactionId', validateUUID, analyzeTransactionForFraud);
+router.get('/statistics', getFraudStatistics);
+router.get('/flagged', getFlaggedTransactions);
+```
+
+**Benefits**:
+- Secure fraud detection API endpoints
+- Proper input validation for transaction IDs
+- Authentication required for all fraud operations
+
+---
+
 ## 🔄 Data Flow Examples
 
 ### User Registration Flow
@@ -397,6 +538,18 @@ CREATE TABLE audit_logs (
 7. **Database**: Update transaction status based on acquirer response
 8. **Response**: Return transaction details and acquirer response
 9. **Audit**: Log authorization action in audit_logs table
+
+### Fraud Detection Flow
+1. **Request**: POST /api/fraud/analyze/:transactionId
+2. **Authentication**: JWT middleware verifies user token
+3. **Validation**: UUID validation middleware checks transaction ID
+4. **Controller**: fraudController.analyzeTransactionForFraud() processes request
+5. **Database**: Get transaction details and payment method info
+6. **Service**: fraudDetection.analyzeTransaction() performs risk analysis
+7. **Analysis**: Calculate risk score based on velocity, amount, time, geographic rules
+8. **Database**: Store fraud analysis results in fraud_scores table
+9. **Response**: Return risk score, level, and triggered rules
+10. **Audit**: Log fraud analysis action in audit_logs table
 
 ---
 
