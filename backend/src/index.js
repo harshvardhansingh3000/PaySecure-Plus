@@ -8,6 +8,7 @@ import { validateUserRegistration, validateUserLogin, validatePaymentMethod, val
 import authRoutes from "./routes/auth.js";
 import paymentRoutes from "./routes/payments.js";
 import fraudRoutes from "./routes/fraud.js";
+import adminRoutes from "./routes/admin.js";
 
 dotenv.config();
 const PORT = process.env.PORT || 3001;
@@ -31,6 +32,7 @@ const startServer = async () => {
       console.log(`🔐 Authentication enabled`);
       console.log(`💳 Payment processing enabled`);
       console.log(`🛡️ Fraud detection enabled`);
+      console.log(`👑 Admin management enabled`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
@@ -59,6 +61,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/fraud', fraudRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
@@ -70,7 +73,8 @@ app.get('/', (req, res) => {
       validation: 'enabled',
       authentication: 'enabled',
       payments: 'enabled',
-      fraudDetection: 'enabled'
+      fraudDetection: 'enabled',
+      adminManagement: 'enabled'
     });
   });
   
