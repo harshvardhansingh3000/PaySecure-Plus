@@ -7,6 +7,7 @@ import pool, { testConnection, initializeDatabase } from "./database/connection.
 import { validateUserRegistration, validateUserLogin, validatePaymentMethod, validateTransaction, validateUUID } from "./middleware/validation.js";
 import authRoutes from "./routes/auth.js";
 import paymentRoutes from "./routes/payments.js";
+import fraudRoutes from "./routes/fraud.js";
 
 dotenv.config();
 const PORT = process.env.PORT || 3001;
@@ -29,6 +30,7 @@ const startServer = async () => {
       console.log(`✅ Input validation enabled`);
       console.log(`🔐 Authentication enabled`);
       console.log(`💳 Payment processing enabled`);
+      console.log(`🛡️ Fraud detection enabled`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error.message);
@@ -56,6 +58,7 @@ app.use(express.json({ limit: '10mb' }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/fraud', fraudRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
@@ -66,7 +69,8 @@ app.get('/', (req, res) => {
       security: 'enabled',
       validation: 'enabled',
       authentication: 'enabled',
-      payments: 'enabled'
+      payments: 'enabled',
+      fraudDetection: 'enabled'
     });
   });
   
