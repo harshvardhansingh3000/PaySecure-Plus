@@ -4,7 +4,9 @@ import pool from '../database/connection.js';
 // Verify JWT token middleware
 export const authenticateToken = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const cookieToken = req.cookies ? req.cookies.paysecure_session : null;
+  const headerToken = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = cookieToken || headerToken;
 
   if (!token) {
     return res.status(401).json({
@@ -79,7 +81,9 @@ export const requireRole = (roles) => {
 // Optional authentication (doesn't fail if no token)
 export const optionalAuth = async (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  const cookieToken = req.cookies ? req.cookies.paysecure_session : null;
+  const headerToken = authHeader && authHeader.split(' ')[1];
+  const token = cookieToken || headerToken;
 
   if (!token) {
     req.user = null;

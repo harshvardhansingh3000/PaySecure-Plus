@@ -306,3 +306,69 @@ export const getTransaction = async (req, res) => {
     });
   }
 };
+
+export const listTransactions = async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit ?? "25", 10) || 25, 100);
+    const status = req.query.status;
+    const userIdParam = req.query.userId;
+
+    const isAdmin = req.user.role === "admin";
+    const requestedUserId = isAdmin && userIdParam ? userIdParam : req.user.id;
+
+    const values = [requestedUserId, limit];
+    let filterSql = "";
+
+    if (status) {
+      filterSql += " AND t.status = $3";
+      values.push(status);
+    }
+
+    const result = await pool.query(
+      `SELECT t.id,
+              t.amount,
+              t.currency,
+              t.status,
+              t.transaction_type,
+              t.description,
+              t.created_at,
+              t.updated_at,
+              fs.risk_score,
+              fs.risk_level,
+              pm.last_four,
+              pm.brand
+       FROM transactions t
+       LEFT JOIN fraud_scores fs ON fs.transaction_id = t.id
+       LEFT JOIN payment_methods pm ON pm.id = t.payment_method_id
+       WHERE t.user_id = $1${filterSql}
+       ORDER BY t.created_at DESC
+       LIMIT $2`,
+      values
+    );
+
+    res.json({
+      success: true,
+      data: {
+        transactions: result.rows.map((row) => ({
+          id: row.id,
+          amount: row.amount,
+          currency: row.currency,
+          status: row.status,
+          transactionType: row.transaction_type,
+          description: row.description,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          paymentMethod: row.last_four
+            ? { lastFour: row.last_four, brand: row.brand }
+            : null,
+          fraud: row.risk_score !== null
+            ? { riskScore: row.risk_score, riskLevel: row.risk_level }
+            : null,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("List transactions error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};

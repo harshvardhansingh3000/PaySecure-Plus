@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
+import cookieParser from "cookie-parser"; // reads incoming cookies and makes them accessible using req.cookies
 import pool, { testConnection, initializeDatabase } from "./database/connection.js";
 import { validateUserRegistration, validateUserLogin, validatePaymentMethod, validateTransaction, validateUUID } from "./middleware/validation.js";
 import authRoutes from "./routes/auth.js";
@@ -43,7 +44,7 @@ const startServer = async () => {
 // Security middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true
 }));
 
@@ -56,6 +57,8 @@ const limiter = rateLimit({
 app.use(limiter);
 
 app.use(express.json({ limit: '10mb' }));
+
+app.use(cookieParser());
 
 // Routes
 app.use('/api/auth', authRoutes);

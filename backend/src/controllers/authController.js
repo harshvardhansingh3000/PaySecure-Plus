@@ -128,7 +128,12 @@ export const login = async (req, res) => {
 
     // Generate token
     const token = generateToken(user.id);
-
+    res.cookie("paysecure_session", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours in ms
+    });
     // Log successful login
     await pool.query(
       `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, ip_address, user_agent)
@@ -192,7 +197,11 @@ export const logout = async (req, res) => {
        VALUES ($1, 'logout', 'user', $2, $3)`,
       [req.user.id, req.ip, req.get('User-Agent')]
     );
-
+    res.clearCookie("paysecure_session", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
     res.json({
       success: true,
       message: 'Logout successful'
