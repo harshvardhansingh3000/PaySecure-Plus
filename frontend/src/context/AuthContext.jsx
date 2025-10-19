@@ -51,6 +51,31 @@ export function AuthProvider({ children }) {
 
     await fetchProfile();
   }
+  async function register(payload) {
+  setError(null);
+  setIsLoading(true);
+  try {
+    const response = await fetch("http://localhost:3001/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const body = await response.json();
+      throw new Error(body.message || "Registration failed");
+    }
+
+    await fetchProfile(); // populate user after register
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Registration failed";
+    setError(message);
+    throw err;
+  } finally {
+    setIsLoading(false);
+  }
+}
 
   async function logout() {
     try {
@@ -69,6 +94,7 @@ export function AuthProvider({ children }) {
     isLoading,
     error,
     login,
+    register,
     logout,
     refresh: fetchProfile,
   };

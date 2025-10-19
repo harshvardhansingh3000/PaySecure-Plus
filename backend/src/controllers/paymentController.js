@@ -1,5 +1,6 @@
 import pool from '../database/connection.js';
 import { authorizeTransaction, captureTransaction, refundTransaction } from '../services/mockAcquirer.js';
+import { v4 as uuidv4 } from "uuid";
 
 // Authorize a payment
 export const authorizePayment = async (req, res) => {
@@ -58,38 +59,16 @@ export const authorizePayment = async (req, res) => {
     );
 
     const updatedTransaction = updateResult.rows[0];
+    const fraud = await evaluateAndPersistFraudScore({
+      transaction: updatedTransaction,
+      userId: req.user.id,
+    });
 
-    // Log transaction
-    await pool.query(
-      `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, new_values, ip_address, user_agent)
-       VALUES ($1, 'payment_authorized', 'transaction', $2, $3, $4, $5)`,
-      [
-        userId,
-        transaction.id,
-        JSON.stringify({ amount, currency, status }),
-        req.ip,
-        req.get('User-Agent')
-      ]
-    );
-
-    res.json({
-      success: acquirerResponse.success,
-      message: acquirerResponse.success ? 'Payment authorized successfully' : 'Payment authorization failed',
+    return res.status(201).json({
+      success: true,
       data: {
-        transaction: {
-          id: updatedTransaction.id,
-          amount: updatedTransaction.amount,
-          currency: updatedTransaction.currency,
-          status: updatedTransaction.status,
-          externalId: updatedTransaction.external_id,
-          createdAt: updatedTransaction.created_at
-        },
-        acquirerResponse: {
-          responseCode: acquirerResponse.response_code,
-          responseMessage: acquirerResponse.response_message,
-          authCode: acquirerResponse.auth_code
-        }
-      }
+        transaction: buildTransactionResponse(updatedTransaction, fraud),
+      },
     });
   } catch (error) {
     console.error('Authorization error:', error);
@@ -123,7 +102,8 @@ export const capturePayment = async (req, res) => {
     const transaction = transactionResult.rows[0];
 
     // Call mock acquirer for capture
-    const acquirerResponse = await captureTransaction(transaction.external_id, amount);
+    const amountToCapture = amount ?? transaction.amount;
+    const acquirerResponse = await captureTransaction(transaction.external_id, amountToCapture);
 
     // Update transaction status
     const status = acquirerResponse.success ? 'captured' : 'failed';
@@ -136,36 +116,18 @@ export const capturePayment = async (req, res) => {
     );
 
     const updatedTransaction = updateResult.rows[0];
-
-    // Log capture
-    await pool.query(
-      `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, new_values, ip_address, user_agent)
-       VALUES ($1, 'payment_captured', 'transaction', $2, $3, $4, $5)`,
-      [
-        userId,
-        transactionId,
-        JSON.stringify({ amount, status }),
-        req.ip,
-        req.get('User-Agent')
-      ]
-    );
+    const fraud = await fetchFraudScore(transactionId);
 
     res.json({
       success: acquirerResponse.success,
-      message: acquirerResponse.success ? 'Payment captured successfully' : 'Payment capture failed',
+      message: acquirerResponse.success ? "Payment captured successfully" : "Payment capture failed",
       data: {
-        transaction: {
-          id: updatedTransaction.id,
-          amount: updatedTransaction.amount,
-          status: updatedTransaction.status,
-          externalId: updatedTransaction.external_id,
-          updatedAt: updatedTransaction.updated_at
-        },
+        transaction: buildTransactionResponse(updatedTransaction, fraud, transaction),
         acquirerResponse: {
           responseCode: acquirerResponse.response_code,
-          responseMessage: acquirerResponse.response_message
-        }
-      }
+          responseMessage: acquirerResponse.response_message,
+        },
+      },
     });
   } catch (error) {
     console.error('Capture error:', error);
@@ -199,7 +161,8 @@ export const refundPayment = async (req, res) => {
     const transaction = transactionResult.rows[0];
 
     // Call mock acquirer for refund
-    const acquirerResponse = await refundTransaction(transaction.external_id, amount);
+    const amountToRefund = amount ?? transaction.amount;
+    const acquirerResponse = await refundTransaction(transaction.external_id, amountToRefund);
 
     // Update transaction status
     const status = acquirerResponse.success ? 'refunded' : 'failed';
@@ -212,36 +175,18 @@ export const refundPayment = async (req, res) => {
     );
 
     const updatedTransaction = updateResult.rows[0];
-
-    // Log refund
-    await pool.query(
-      `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, new_values, ip_address, user_agent)
-       VALUES ($1, 'payment_refunded', 'transaction', $2, $3, $4, $5)`,
-      [
-        userId,
-        transactionId,
-        JSON.stringify({ amount, status }),
-        req.ip,
-        req.get('User-Agent')
-      ]
-    );
+    const fraud = await fetchFraudScore(transactionId);
 
     res.json({
       success: acquirerResponse.success,
-      message: acquirerResponse.success ? 'Payment refunded successfully' : 'Payment refund failed',
+      message: acquirerResponse.success ? "Payment refunded successfully" : "Payment refund failed",
       data: {
-        transaction: {
-          id: updatedTransaction.id,
-          amount: updatedTransaction.amount,
-          status: updatedTransaction.status,
-          externalId: updatedTransaction.external_id,
-          updatedAt: updatedTransaction.updated_at
-        },
+        transaction: buildTransactionResponse(updatedTransaction, fraud, transaction),
         acquirerResponse: {
           responseCode: acquirerResponse.response_code,
-          responseMessage: acquirerResponse.response_message
-        }
-      }
+          responseMessage: acquirerResponse.response_message,
+        },
+      },
     });
   } catch (error) {
     console.error('Refund error:', error);
@@ -358,9 +303,7 @@ export const listTransactions = async (req, res) => {
           description: row.description,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
-          paymentMethod: row.last_four
-            ? { lastFour: row.last_four, brand: row.brand }
-            : null,
+          paymentMethod: row.last_four ? { lastFour: row.last_four, brand: row.brand } : null,
           fraud: row.risk_score !== null
             ? { riskScore: row.risk_score, riskLevel: row.risk_level }
             : null,
@@ -372,3 +315,185 @@ export const listTransactions = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+
+export const listPaymentMethods = async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, token, brand, last_four, expiry_month, expiry_year, is_default, created_at
+       FROM payment_methods
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [req.user.id]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        paymentMethods: result.rows.map((row) => ({
+          id: row.id,
+          token: row.token,
+          brand: row.brand,
+          lastFour: row.last_four,
+          expiryMonth: row.expiry_month,
+          expiryYear: row.expiry_year,
+          isDefault: row.is_default,
+          createdAt: row.created_at,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error("List payment methods error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+export const addPaymentMethod = async (req, res) => {
+  try {
+    const { brand, lastFour, expiryMonth, expiryYear } = req.body;
+
+    if (!brand || !/^\d{4}$/.test(lastFour || "")) {
+      return res.status(400).json({ success: false, message: "Invalid card details provided." });
+    }
+
+    const token = `tok_${uuidv4().replace(/-/g, "")}`;
+
+    const result = await pool.query(
+      `INSERT INTO payment_methods (user_id, token, brand, last_four, expiry_month, expiry_year)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, token, brand, last_four, expiry_month, expiry_year, is_default, created_at`,
+      [req.user.id, token, brand, lastFour, expiryMonth, expiryYear]
+    );
+
+    const method = result.rows[0];
+
+    await pool.query(
+      `INSERT INTO audit_logs (user_id, action, resource_type, resource_id, new_values, ip_address, user_agent)
+       VALUES ($1, 'payment_method_added', 'payment_method', $2, $3, $4, $5)`,
+      [
+        req.user.id,
+        method.id,
+        JSON.stringify({ brand: method.brand, lastFour: method.last_four }),
+        req.ip,
+        req.get("User-Agent"),
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      data: {
+        paymentMethod: {
+          id: method.id,
+          token: method.token,
+          brand: method.brand,
+          lastFour: method.last_four,
+          expiryMonth: method.expiry_month,
+          expiryYear: method.expiry_year,
+          isDefault: method.is_default,
+          createdAt: method.created_at,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Add payment method error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// ... existing code ...
+
+async function evaluateAndPersistFraudScore({ transaction, userId }) {
+  const velocityResult = await pool.query(
+    `SELECT COUNT(*)::int AS count
+     FROM transactions
+     WHERE user_id = $1
+       AND created_at >= NOW() - INTERVAL '24 hours'`,
+    [userId]
+  );
+
+  const velocityCount = velocityResult.rows[0]?.count ?? 0;
+
+  const fraudScore = scoreTransactionRisk({
+    amount: Number(transaction.amount || 0),
+    transactionType: transaction.transaction_type,
+    velocityCount,
+  });
+
+  await pool.query("DELETE FROM fraud_scores WHERE transaction_id = $1", [transaction.id]);
+
+  await pool.query(
+    `INSERT INTO fraud_scores (id, transaction_id, risk_score, risk_level, rules_triggered)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [
+      uuidv4(),
+      transaction.id,
+      fraudScore.riskScore,
+      fraudScore.riskLevel,
+      JSON.stringify(fraudScore.rulesTriggered),
+    ]
+  );
+
+  return fraudScore;
+}
+
+function scoreTransactionRisk({ amount, transactionType, velocityCount }) {
+  const rulesTriggered = [];
+  let riskScore = 0;
+
+  if (amount >= 5000) {
+    riskScore += 50;
+    rulesTriggered.push("HIGH_VALUE");
+  } else if (amount >= 1000) {
+    riskScore += 25;
+    rulesTriggered.push("MID_VALUE");
+  }
+
+  if (velocityCount > 5) {
+    riskScore += 30;
+    rulesTriggered.push("VELOCITY_SPIKE");
+  } else if (velocityCount > 3) {
+    riskScore += 15;
+    rulesTriggered.push("VELOCITY_WARNING");
+  }
+
+  if (transactionType === "refund") {
+    riskScore += 10;
+    rulesTriggered.push("REFUND_ACTIVITY");
+  }
+
+  const riskLevel = riskScore >= 75 ? "high" : riskScore >= 40 ? "medium" : "low";
+  return { riskScore, riskLevel, rulesTriggered };
+}
+
+async function fetchFraudScore(transactionId) {
+  const result = await pool.query(
+    `SELECT risk_score, risk_level, rules_triggered
+     FROM fraud_scores
+     WHERE transaction_id = $1`,
+    [transactionId]
+  );
+
+  if (result.rows.length === 0) return null;
+
+  const row = result.rows[0];
+  return {
+    riskScore: row.risk_score,
+    riskLevel: row.risk_level,
+    rulesTriggered: row.rules_triggered,
+  };
+}
+
+function buildTransactionResponse(row, fraud = null, fallback = null) {
+  return {
+    id: row.id,
+    amount: row.amount,
+    currency: row.currency ?? fallback?.currency ?? null,
+    status: row.status,
+    transactionType: row.transaction_type,
+    description: row.description ?? fallback?.description ?? null,
+    externalId: row.external_id ?? fallback?.external_id ?? null,
+    createdAt: row.created_at ?? fallback?.created_at ?? null,
+    updatedAt: row.updated_at,
+    paymentMethodId: row.payment_method_id ?? fallback?.payment_method_id ?? null,
+    fraud,
+  };
+}

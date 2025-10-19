@@ -1,6 +1,6 @@
 import { useState,useEffect } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
-import { useNavigate } from "react-router-dom";
+import { Link,useNavigate } from "react-router-dom";
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -79,7 +79,15 @@ function Login() {
         >
           {isSubmitting ? "Signing in…" : "Sign in"}
         </button>
-
+        <p className="text-sm text-slate-400 text-center">
+          New here?
+          <Link
+            to="/auth/register"
+            className="ml-2 font-semibold text-indigo-300 hover:text-indigo-200"
+          >
+            Create an account
+          </Link>
+        </p>
         {status.type && (
           <p
             className={`text-sm ${

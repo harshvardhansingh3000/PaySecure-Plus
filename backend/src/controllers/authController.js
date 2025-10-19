@@ -214,3 +214,81 @@ export const logout = async (req, res) => {
     });
   }
 };
+
+// List users
+export const listUsers = async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, email, first_name, last_name, role, created_at
+       FROM users
+       ORDER BY created_at DESC`
+    );
+
+    res.json({
+      success: true,
+      data: { users: result.rows.map((row) => ({
+        id: row.id,
+        email: row.email,
+        firstName: row.first_name,
+        lastName: row.last_name,
+        role: row.role,
+        createdAt: row.created_at,
+      })) },
+    });
+  } catch (error) {
+    console.error("List users error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+// Update user role
+export const updateUserRole = async (req, res) => {
+  const { id } = req.params;
+  const { role } = req.body;
+
+  const allowedRoles = ["user", "admin"];
+
+  if (!allowedRoles.includes(role)) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid role supplied." });
+  }
+
+  if (req.user.id === id) {
+    return res
+      .status(400)
+      .json({ success: false, message: "You cannot change your own role." });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET role = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, email, first_name, last_name, role`,
+      [role, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    const updated = result.rows[0];
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: updated.id,
+          email: updated.email,
+          firstName: updated.first_name,
+          lastName: updated.last_name,
+          role: updated.role,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Update user role error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};

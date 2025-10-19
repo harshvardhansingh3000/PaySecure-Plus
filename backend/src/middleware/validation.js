@@ -1,4 +1,7 @@
 import { body, param, validationResult } from 'express-validator';
+import validator from "validator";
+const { isUUID } = validator;
+
 // body → used to validate fields in the request body (like req.body.email).
 
 // param → used to validate route parameters (like req.params.id).
@@ -50,7 +53,7 @@ export const validateUserRegistration = [
     // at least one number
     
     // at least one special character (@, $, !, %, *, ?, &)
-    body('firstName')
+  body('firstName')
     .trim()
     .isLength({ min: 2, max: 50 })
     .withMessage('First name must be between 2 and 50 characters'),
@@ -114,8 +117,28 @@ export const validateTransaction = [
 
 // UUID parameter validation
 export const validateUUID = [
-  param('id')
-    .isUUID()
-    .withMessage('Invalid ID format'),
-  handleValidationErrors
+  (req, res, next) => {
+    const keys = ["id", "userId", "transactionId", "methodId", "paymentMethodId"];
+    const key = keys.find((name) => req.params[name]);
+    const value = key ? req.params[key] : null;
+
+    if (!value || !isUUID(value)) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: [{ field: key ?? "id", message: "Invalid ID format" }],
+      });
+    }
+    next();
+  },
+];
+
+// Capture or refund validation
+export const validateCaptureOrRefund = [
+  body("amount")
+    .optional()
+    .isDecimal({ decimal_digits: "0,2" })
+    .isFloat({ min: 0.01 })
+    .withMessage("Amount must be a positive decimal with up to 2 decimal places"),
+  handleValidationErrors,
 ];
